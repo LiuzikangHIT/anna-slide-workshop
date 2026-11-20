@@ -1,0 +1,22 @@
+{
+  "name": "anna-slide-workshop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test",
+    "validate": "npm run build && anna-app validate --bundle bundle --strict",
+    "dev": "anna-app dev --no-llm"
+  },
+  "dependencies": {
+    "pptxgenjs": "4.0.1"
+  },
+  "devDependencies": {
+    "@anna-ai/cli": "0.1.64",
+    "jszip": "3.10.1"
+  }
+}

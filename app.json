@@ -1,0 +1,9 @@
+{
+  "name": "演示工坊",
+  "slug": "slide-workshop",
+  "version": "1.0.0",
+  "category": "productivity",
+  "tagline": "把主题和素材变成可编辑的演示文稿",
+  "description": "为汇报、提案和培训起草演示文稿。输入主题、受众与素材，使用 Anna AI 生成 5、7 或 9 页。逐页预览，编辑标题和要点，下载可在 PowerPoint 中继续修改的 16:9 PPTX。每次生成仅调用一次 Anna AI，编辑与导出无需额外额度。",
+  "homepage_url": "https://github.com/LiuzikangHIT/anna-slide-workshop"
+}

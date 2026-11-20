@@ -1,0 +1,32 @@
+{
+  "schema": 4,
+  "required_executas": [],
+  "system_prompt_addendum": "当用户想制作 PPT 时，打开「演示工坊」的 main 视图，并在 payload 中提供 topic 和 audience（如有）。用户可在视图生成、编辑并导出 PPTX。",
+  "tags": [
+    "presentation",
+    "pptx",
+    "productivity"
+  ],
+  "ui": {
+    "bundle": {
+      "format": "static-spa",
+      "entry": "index.html"
+    },
+    "views": [
+      {
+        "name": "main",
+        "title": "演示工坊",
+        "default": true,
+        "min_size": {
+          "w": 380,
+          "h": 420
+        },
+        "default_size": {
+          "w": 1120,
+          "h": 740
+        },
+        "single_instance": true
+      }
+    ]
+  }
+}
