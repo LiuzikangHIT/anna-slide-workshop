@@ -11,66 +11,20 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-icon" aria-hidden="true"></span><strong>演示工坊</strong></div>
-    <button id="download" class="button button-dark" type="button" disabled>↓ <span>下载 PPTX</span></button>
+    <div class="masthead">
+      <button id="home" class="brand" type="button"><span class="brand-mark" aria-hidden="true"></span>演示工坊</button>
+      <span id="project"></span>
+      <div class="mast-actions">
+        <span id="save" role="status">正在连接 Anna…</span>
+        <button id="retry" hidden>重试保存</button>
+        <button id="backup" hidden>草稿副本</button>
+      </div>
+    </div>
+    <nav id="steps" class="steps" aria-label="演示制作步骤" hidden></nav>
   </header>
-  <main class="workbench">
-    <aside class="brief">
-      <div class="brief-heading">
-        <h1>新建演示文稿</h1>
-        <p>提供主题和素材，生成适合受众的演示初稿。</p>
-      </div>
-      <form id="brief-form">
-        <label for="topic">主题 <span class="required">*</span></label>
-        <input id="topic" name="topic" maxlength="120" required placeholder="例如：新员工知识库培训" autocomplete="off">
-        <label for="audience">受众 <span class="optional">选填</span></label>
-        <input id="audience" name="audience" maxlength="100" placeholder="例如：刚加入团队的同事" autocomplete="off">
-        <label for="source">素材 <span class="optional">选填</span></label>
-        <textarea id="source" name="source" maxlength="2400" rows="4" placeholder="粘贴会议纪要、事实或希望讲清楚的要点"></textarea>
-        <label for="purpose">场景</label>
-        <select id="purpose" name="purpose">
-          <option value="Business update">工作汇报</option>
-          <option value="Proposal with a decision request">提案</option>
-          <option value="Practical training">培训</option>
-        </select>
-        <div class="form-row">
-          <div><label for="count">页数</label><select id="count" name="count">
-            <option value="5">5 页</option><option value="7" selected>7 页</option><option value="9">9 页</option>
-          </select></div>
-          <div><label for="language">文稿语言</label><select id="language" name="language">
-            <option value="Simplified Chinese">简体中文</option><option value="English">English</option>
-          </select></div>
-        </div>
-        <button class="button button-primary" id="generate" type="submit">用 Anna AI 生成</button>
-        <p id="connection" class="hint">正在连接 Anna…</p>
-      </form>
-    </aside>
-    <section class="workspace" aria-label="幻灯片预览和编辑">
-      <div class="workspace-bar">
-        <div><h2>幻灯片</h2><p id="deck-label">5 页 · 16:9</p></div>
-        <label for="theme">配色<select id="theme">
-          <option value="ink">墨蓝</option><option value="sand">暖砂</option><option value="pine">松绿</option>
-        </select></label>
-      </div>
-      <div class="stage" id="stage"></div>
-      <nav id="pages" class="pages" aria-label="选择幻灯片"></nav>
-      <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
-      <section class="example-callout" id="example-callout">
-        <div><strong>你正在预览示例</strong><p>浏览成品、试换配色，或下载示例体验可编辑的 PPTX。</p></div>
-        <button id="use-example" type="button" class="button button-outline">使用示例素材</button>
-      </section>
-      <section id="editor" class="editor" aria-label="编辑当前页" hidden></section>
-    </section>
-  </main>
-  <dialog id="replace-dialog" aria-labelledby="replace-title">
-    <form method="dialog">
-      <h2 id="replace-title">替换当前文稿？</h2>
-      <p>新稿生成成功后会替换窗口中的当前文稿。</p>
-      <div class="dialog-actions">
-        <button class="button button-outline" value="cancel" autofocus>取消</button>
-        <button class="button button-dark" value="replace">生成新稿</button>
-      </div>
-    </form>
-  </dialog>
+  <main id="workspace"></main>
+  <div class="system-status" id="status" role="status" aria-live="polite" hidden></div>
+  <dialog id="dialog"></dialog>
+  <input id="import" type="file" accept=".json,application/json" hidden>
 </body>
 </html>

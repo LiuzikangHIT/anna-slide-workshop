@@ -1,7 +1,7 @@
 {
   "schema": 4,
   "required_executas": [],
-  "system_prompt_addendum": "当用户想制作 PPT 时，打开「演示工坊」的 main 视图，并在 payload 中提供 topic 和 audience（如有）。用户可在视图生成、编辑并导出 PPTX。",
+  "system_prompt_addendum": "当用户想制作 PPT 时，打开「演示工坊」的 main 视图，并在 payload 中提供 topic 和 audience（如有）。应用优先恢复用户的上次草稿。用户可审阅大纲、起草与修改逐页稿，并导出可编辑的 PPTX。",
   "tags": [
     "presentation",
     "pptx",
