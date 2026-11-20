@@ -62,5 +62,15 @@
       <section id="editor" class="editor" aria-label="编辑当前页" hidden></section>
     </section>
   </main>
+  <dialog id="replace-dialog" aria-labelledby="replace-title">
+    <form method="dialog">
+      <h2 id="replace-title">替换当前文稿？</h2>
+      <p>新稿生成成功后会替换窗口中的当前文稿。</p>
+      <div class="dialog-actions">
+        <button class="button button-outline" value="cancel" autofocus>取消</button>
+        <button class="button button-dark" value="replace">生成新稿</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

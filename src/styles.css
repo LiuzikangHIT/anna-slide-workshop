@@ -111,3 +111,12 @@ form > input, form > select, form > textarea, .form-row { margin-bottom: 14px; }
 @media (prefers-reduced-motion: no-preference) {
   .button, .page { transition: background-color .15s; }
 }
+
+dialog {
+  width: min(90vw, 360px); padding: 19px; border: 1px solid #d6e0e8; border-radius: 10px;
+  color: #15253a; box-shadow: 0 10px 45px #17263b40;
+}
+dialog::backdrop { background: #14223578; }
+dialog h2 { font-size: 17px; }
+dialog p { margin-top: 6px; color: #51647c; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

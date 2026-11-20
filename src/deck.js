@@ -78,7 +78,7 @@ export function makeRequest(input) {
   const brief = {
     topic: cleanText(input.topic, limits.topic),
     audience: cleanText(input.audience, limits.audience),
-    source: cleanText(input.source, limits.source),
+    source: Array.from(typeof input.source === 'string' ? input.source.trim() : '').slice(0, limits.source).join(''),
   }
   return {
     messages: [

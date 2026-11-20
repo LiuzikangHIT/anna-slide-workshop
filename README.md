@@ -6,7 +6,7 @@
 
 ## 本地开发
 
-需要 Node.js 22 或更新版本。
+构建需要 Node.js 22 或更新版本。运行本地 harness 还需要可用的 `uvx`（由 uv 提供）。
 
 ```bash
 npm ci
@@ -19,7 +19,7 @@ npm run dev
 
 ```bash
 npx anna-app login --host https://staging.anna.partners --no-browser
-npx anna-app dev --llm real --llm-account https://staging.anna.partners
+npx anna-app dev --slug slide-workshop --llm-account https://staging.anna.partners
 ```
 
 ## 架构与费用

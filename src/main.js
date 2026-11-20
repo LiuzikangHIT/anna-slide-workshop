@@ -10,6 +10,7 @@ const connection = find('connection')
 const stage = find('stage')
 const pages = find('pages')
 const editor = find('editor')
+const replacement = find('replace-dialog')
 let deck = example
 let current = 0
 let anna
@@ -141,7 +142,7 @@ find('use-example').addEventListener('click', () => {
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault()
-  if (!anna || pending) return
+  if (!anna || pending || replacement.open) return
   const input = Object.fromEntries(new FormData(form))
   input.count = Number(input.count)
   if (!input.topic.trim()) {
@@ -149,7 +150,14 @@ form.addEventListener('submit', async (event) => {
     return
   }
   if (!counts.includes(input.count)) return
-  if (deck !== example && !window.confirm('生成新稿会替换当前稿件。继续生成？')) return
+  if (deck !== example) {
+    // 使用页面内对话框，避免 Anna iframe 对浏览器确认框的限制
+    replacement.returnValue = ''
+    const decision = new Promise((resolve) => replacement.addEventListener('close', resolve, { once: true }))
+    replacement.showModal()
+    await decision
+    if (replacement.returnValue !== 'replace') return
+  }
 
   pending = true
   generate.disabled = true
