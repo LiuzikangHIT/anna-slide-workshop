@@ -26,3 +26,4 @@
 ## 技术文档索引
 
 - [Anna 演示工坊开发计划](docs/dev/plan/20261120T1551-PLAN-Anna演示工坊.md)：范围、实现、测试和发布验收。
+- [Anna staging 扩展实测](docs/dev/plan/20261120T1636-PLAN-Anna扩展实测.md)：复杂素材、真实模型额度和 PPTX 验收。
