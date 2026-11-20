@@ -29,23 +29,23 @@ button.primary, .button.primary { color: #fff; background: var(--accent); border
 button.primary:hover:enabled, .button.primary:hover { background: #084d42; }
 button[aria-pressed="true"], button[aria-current="page"] { border-color: var(--accent); background: var(--pale); color: #0a5045; }
 .topbar { position: sticky; top: 0; z-index: 4; background: var(--paper); border-bottom: 1px solid var(--line); }
-.masthead, .anna-bar, .steps { padding-inline: clamp(12px, 2.5vw, 32px); max-width: 1500px; margin: auto; }
-.masthead { min-height: 56px; display: flex; align-items: center; gap: 14px; }
+.masthead, .steps { padding-inline: clamp(12px, 2.5vw, 32px); max-width: 1500px; margin: auto; }
+.masthead { min-height: 56px; display: flex; align-items: center; gap: 12px; padding-block: 5px; }
 .brand { gap: 8px; flex: 0 0 auto; border: 0; background: transparent; padding-inline: 0; white-space: nowrap; font-size: 1.12rem; }
 .brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); display: grid; place-items: center; }
 .brand-mark::before { content: ""; width: 13px; height: 8px; border: 1.5px solid #9ce6c3; border-radius: 2px; }
-#project { border-left: 1px solid var(--line); padding-left: 14px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+#project { min-width: 0; max-width: clamp(7rem, 13vw, 12rem); border-left: 1px solid var(--line); padding-left: 12px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
 #project:empty { display: none; }
-.mast-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; text-align: right; }
+.mast-actions { margin-left: auto; display: flex; flex: 0 0 auto; align-items: center; gap: 8px; text-align: right; }
 #save { font-size: .83rem; color: var(--muted); }
 .topbar .mast-actions button { min-height: 30px; padding: 3px 7px; font-size: .83rem; }
 .anna-bar, .anna-controls, .anna-usage { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
-.anna-bar { padding-block: 5px; border-block: 1px solid var(--line); }
+.anna-bar { flex: 1 1 0; }
 .anna-controls, .anna-usage { font-size: .86rem; }
 .anna-controls .field { display: flex; align-items: center; gap: 5px; margin: 0; }
 .anna-controls .field span { white-space: nowrap; }
 .anna-controls .field :is(select, input) { width: auto; max-width: 165px; min-height: 28px; padding: 2px 6px; }
-.anna-controls #anna-model { width: 142px; }
+.anna-controls #anna-model { width: 128px; }
 .anna-usage { color: var(--muted); overflow-wrap: anywhere; }
 .steps { display: flex; overflow: auto; gap: 8px; }
 .steps button { border: 0; border-radius: 0; background: transparent; border-bottom: 3px solid transparent; white-space: nowrap; padding: 4px 11px; min-height: 36px; }
@@ -154,8 +154,10 @@ dialog.present { width: min(94vw, calc(67vh * 16 / 9)); background: #132b31; }
   .editor-panel { padding: 9px; }
 }
 @media (max-width: 760px) {
-  .masthead { gap: 7px; min-height: 46px; }
-  #project { padding-left: 7px; font-size: .85rem; }
+  .masthead { flex-wrap: wrap; gap: 3px 8px; min-height: 46px; }
+  #project { flex: 1 1 0; max-width: none; padding-left: 7px; font-size: .85rem; }
+  .anna-bar { order: 1; flex: 0 0 100%; }
+  .anna-bar, .anna-controls, .anna-usage { gap: 2px 8px; }
   .steps { gap: 4px; }
   .steps button { padding-inline: 6px; }
   .welcome { grid-template-columns: 1fr; padding: 20px; overflow: hidden; }
