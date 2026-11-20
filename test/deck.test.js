@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm'
 import test from 'node:test'
 import JSZip from 'jszip'
 import PptxGenJS from 'pptxgenjs'
-import { batchPlan, exampleDraft, hasOutlineWork, invalidate, makeOutline, newDraft, nextBatch, outlineProblem, pageCount, pendingPages } from '../src/deck.js'
+import { exampleDraft, hasOutlineWork, invalidate, makeOutline, newDraft, nextBatch, outlineProblem, pageCount, pendingPages } from '../src/deck.js'
 import { complete, makeRequest, OutlineResponseError, parseResponse } from '../src/anna.js'
 import { createPptx, deckFilename } from '../src/pptx.js'
 import { localReview } from '../src/review.js'
@@ -103,7 +103,7 @@ test('大纲兼容 Markdown 包装、分段文本、旧章节结构和乱序页�
   await assert.rejects(complete(mocked(async () => response({ pages: rows.slice(0, 4) })), 'outline', draft, []),
     { name: 'Error', message: /返回 4 页，目标为 5 页/ })
   assert.throws(() => parseResponse('outline', response({ pages: [...rows.slice(0, 4), rows[0]] }), [], draft), /页码/)
-  assert.throws(() => parseResponse('outline', response({ pages: rows.map(({ objective, ...row }) => row) }), [], draft), /第 1 页缺少演示目标/)
+  assert.throws(() => parseResponse('outline', response({ pages: rows.map(({ objective, ...row }) => row) }), [], draft), /第 1 页缺少主要内容/)
   assert.throws(() => parseResponse('outline', { content: { text: '待整理' } }, [], draft), OutlineResponseError)
   assert.equal(draft.usage.missing, 1)
   const correction = JSON.parse(makeRequest('outline', draft, [], '大纲返回 4 页').messages[0].content.text)
@@ -225,13 +225,13 @@ test('从 APS 恢复 30 页稿，续跑保留已完成批次并还原选中页',
   const ids = draft.pages.map(({ id }) => id)
   assert.ok(Buffer.byteLength(JSON.stringify(draft)) > 56000)
   const original = structuredClone(draft)
+  draft.preferences.batchSize = 1
   for (const page of draft.pages) page.stale = true
-  const estimated = batchPlan(draft, ids, 3)
-  assert.ok(estimated > 10)
-  const first = nextBatch(draft, ids, 3)
+  const first = nextBatch(draft, ids)
+  assert.equal(first.length, 3)
   first.forEach((page) => { page.stale = false })
   draft.batches.push({ ids: first.map(({ id }) => id) })
-  const interrupted = nextBatch(draft, ids, 3)
+  const interrupted = nextBatch(draft, ids)
   await assert.rejects(complete(mocked(async () => ({ stopReason: 'maxTokens' })), 'script', draft, interrupted), /输出上限/)
   draft.current = ids[3]
   draft.step = 4
@@ -241,7 +241,7 @@ test('从 APS 恢复 30 页稿，续跑保留已完成批次并还原选中页',
   assert.ok(storage.rows.size > 1)
   const resumed = await apsStore(storage).restore()
   assert.deepEqual(resumed.pages.slice(0, 3), original.pages.slice(0, 3))
-  assert.deepEqual(nextBatch(resumed, ids, 3).map(({ id }) => id), interrupted.map(({ id }) => id))
+  assert.deepEqual(nextBatch(resumed, ids).map(({ id }) => id), interrupted.map(({ id }) => id))
   assert.equal(resumed.pages[3].title, '人工更新')
   assert.equal(resumed.pages[3].notes, draft.pages[3].notes)
   assert.equal(resumed.step, 4)

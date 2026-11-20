@@ -1,9 +1,9 @@
 {
-  "name": "演示工坊",
+  "name": "PPT 演示工坊",
   "slug": "slide-workshop",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "category": "productivity",
   "tagline": "从零散素材到可编辑的演示文稿",
-  "description": "从主题与素材开始，确认后由 Anna 起草 5–30 页中英演示的大纲、文字和初始排版。逐步审阅和修改，最后下载可继续编辑文字、图表和备注的 16:9 PPTX。Anna 自动保存并支持分批续写，生成操作在确认后使用额度。",
+  "description": "从主题与素材开始，由 Anna 起草 5–30 页中英演示的大纲、文字和初始排版。逐步审阅和修改，最后下载可继续编辑文字、图表和备注的 16:9 PPTX。Anna 自动保存并支持分批续写。",
   "homepage_url": "https://github.com/LiuzikangHIT/anna-slide-workshop"
 }

@@ -1,5 +1,6 @@
 export const scenarios = { report: '工作汇报', proposal: '提案', training: '培训' }
 export const layouts = { cover: '封面', evidence: '结论与证据', compare: '双栏对比', steps: '步骤流程', chart: '数据图表', action: '行动收束' }
+const generationBatchSize = 3
 
 export function pageCount(value) {
   const n = typeof value === 'number' || typeof value === 'string' && value.trim() ? Number(value) : NaN
@@ -18,7 +19,8 @@ export function newDraft() {
     version: 1, brief: { topic: '', audience: '', goal: '', source: '', required: '', scenario: 'report', count: '7', language: 'zh' },
     sections: [], pages: [], confirmed: false, scriptConfirmed: false, designReached: false, step: 0, current: null,
     template: 'briefing', templateChosen: false, transition: 'none', batches: [], review: [], acknowledged: false,
-    preferences: { model: '', supportsThinking: false, effort: '', batchSize: 3 }, usage: { total: 0, missing: 0, last: null },
+    // V1 草稿保留固定批次值供旧版读取，实际分批使用统一上限
+    preferences: { model: '', supportsThinking: false, effort: '', batchSize: generationBatchSize }, usage: { total: 0, missing: 0, last: null },
   }
 }
 
@@ -108,7 +110,7 @@ export function outlineProblem(draft) {
   const diff = count - draft.pages.length
   if (diff) return diff > 0 ? '还差 ' + diff + ' 页。' : '超出 ' + -diff + ' 页。'
   const sections = new Set(draft.sections.filter(({ title }) => title.trim()).map(({ id }) => id))
-  if (draft.pages.some((page) => !page.planTitle.trim() || !page.goal.trim() || !sections.has(page.sectionId))) return '请填写每页标题、目标及所属章节。'
+  if (draft.pages.some((page) => !page.planTitle.trim() || !page.goal.trim() || !sections.has(page.sectionId))) return '请填写页标题、主要内容和所属章节。'
   return ''
 }
 
@@ -125,14 +127,7 @@ export function pendingPages(draft, kind = 'script') {
   return draft.pages.filter(({ written, stale, designed }) => kind === 'visual' ? written && !stale && !designed : !written || stale)
 }
 
-export function nextBatch(draft, ids, size, kind) {
+export function nextBatch(draft, ids, kind) {
   const pending = pendingPages(draft, kind).filter(({ id }) => ids.includes(id))
-  return pending.filter(({ sectionId }) => sectionId === pending[0]?.sectionId).slice(0, size)
-}
-
-export function batchPlan(draft, ids, size, kind) {
-  const pending = pendingPages(draft, kind).filter(({ id }) => ids.includes(id))
-  return draft.sections.reduce((total, { id }) => total + Math.ceil(
-    pending.filter((page) => page.sectionId === id).length / size
-  ), 0)
+  return pending.filter(({ sectionId }) => sectionId === pending[0]?.sectionId).slice(0, generationBatchSize)
 }

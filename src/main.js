@@ -1,4 +1,4 @@
-import { batchPlan, exampleDraft, hasOutlineWork, invalidate, layouts, makeOutline, newDraft, newPage, nextBatch, outlineProblem, pageCount, pendingPages, scenarios, validateBrief } from './deck.js'
+import { exampleDraft, hasOutlineWork, invalidate, layouts, makeOutline, newDraft, newPage, nextBatch, outlineProblem, pageCount, pendingPages, scenarios, validateBrief } from './deck.js'
 import { complete, OutlineResponseError } from './anna.js'
 import { apsStore, readDraft, saving } from './storage.js'
 import { fits, height, recommended, scene, templates, width } from './visual.js'
@@ -6,7 +6,7 @@ import { localReview } from './review.js'
 import { createPptx, deckFilename } from './pptx.js'
 
 const find = (id) => document.getElementById(id)
-const stepNames = ['演示需求', '大纲', '文字稿', '视觉', '排版', '审查与导出']
+const stepNames = ['演示需求', '大纲', '文字稿', '风格', '排版', '审查与导出']
 const views = [briefView, outlineView, scriptView, designView, editView, reviewView]
 let draft
 let anna
@@ -20,6 +20,8 @@ let local = true
 let home = true
 let connected = false
 let catalog = []
+let activeModelSettings
+let showThinking = false
 let job
 let candidate
 let rewrite = ''
@@ -170,8 +172,8 @@ function homeView() {
   const openExample = () => begin(exampleDraft(), true)
   return el('section', { class: 'welcome' },
     el('div', { class: 'welcome-copy' },
-      text('h1', '让素材变成一场演示'),
-      text('p', '先确定观众需要听懂什么，再审阅大纲、打磨逐页文字与视觉，最后下载可继续编辑的幻灯片。'),
+      text('h1', '创建演示文稿'),
+      text('p', '填写演示需求，审阅大纲和文字稿，调整风格与排版后导出可编辑的 PPTX。'),
       actions(resume && button('继续上次草稿', () => {
         if (resume === draft) { home = false; render(true) } else begin(resume, false)
       }, { primary: true }),
@@ -199,6 +201,7 @@ function render(focus = false) {
   const stepNav = find('steps')
   find('project').textContent = !home && draft ? draft.brief.topic || '未命名演示' : ''
   find('backup').hidden = !draft
+  renderAnnaBar()
   stepNav.hidden = home
   if (home) workspace.replaceChildren(homeView())
   else {
@@ -207,7 +210,7 @@ function render(focus = false) {
       disabled: index >= 2 && !draft.pages.length || index >= 3 && !draft.scriptConfirmed && !draft.designReached ||
         index >= 4 && !draft.designReached && pendingPages(draft, 'visual').length > 0,
     })))
-    workspace.replaceChildren(...[views[draft.step](), job && progress(), usage()].filter(Boolean))
+    workspace.replaceChildren(...[job && progress(), views[draft.step]()].filter(Boolean))
     stepNav.querySelector('[aria-current]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }
   if (focus) {
@@ -267,9 +270,9 @@ function briefView() {
       field('场景', model, 'scenario', { choices: scenarios, update: edit }),
       count,
       field('文稿语言', model, 'language', { choices: { zh: '简体中文', en: 'English' }, update: edit })),
-    field('演示目标', model, 'goal', { rows: 2, placeholder: '希望听众记住什么，或采取什么行动？', update: edit }),
+    field('演示目标', model, 'goal', { rows: 2, placeholder: '例如：说明试点结果并确定推广方案', update: edit }),
     field('素材', model, 'source', { rows: 5, placeholder: '粘贴会议记录、调研结果或已有段落', update: edit }),
-    field('必讲项', model, 'required', { rows: 3, placeholder: '事实、数字或约束，每行一项', update: edit }),
+    field('必讲内容', model, 'required', { rows: 3, placeholder: '事实、数据或限制条件，每行一项', update: edit }),
     payload && ['topic', 'audience'].some((key) => payload[key] && payload[key] !== model[key]) &&
       button('使用 Anna 入口提供的主题和受众', () => modal('替换当前需求字段？', text('p', '替换后保留大纲和文字稿，相关页面标为待更新。'), () => {
         for (const name of ['topic', 'audience']) if (typeof payload[name] === 'string' && payload[name].trim()) model[name] = payload[name]
@@ -278,8 +281,7 @@ function briefView() {
         render()
       })))
   return el('div', { class: 'narrow' },
-    pageBar(stepNames[0], '只填主题即可开始。总页数包含封面、过渡及结尾。', primary),
-    fields, preferencesView())
+    pageBar(stepNames[0], '主题为必填项。总页数含封面、过渡页和结尾。', primary), fields)
 }
 
 function startManualOutline() {
@@ -291,15 +293,14 @@ function startManualOutline() {
 
 function outlineView() {
   if (!draft.pages.length) return el('div', { class: 'narrow' },
-    pageBar(stepNames[1], 'Anna 会生成逐页标题、目标和章节，起草完成后可修改。',
+    pageBar(stepNames[1], '大纲包括章节、页标题和主要内容，生成后可编辑。',
       anna && draft.brief.topic.trim() ? button(job ? '正在起草大纲…' : '用 Anna 起草大纲', requestOutline, { primary: true, disabled: Boolean(job) })
         : button('填写演示需求', () => go(0), { primary: true }),
-      anna && draft.brief.topic.trim() && button('手工编写大纲', startManualOutline, { disabled: Boolean(job) })),
-    preferencesView())
+      anna && draft.brief.topic.trim() && button('手工编写大纲', startManualOutline, { disabled: Boolean(job) })))
   const start = () => anna && !hasOutlineWork(draft)
   const primary = button('', () => start() ? requestOutline() : confirm(), { primary: true, disabled: Boolean(job) })
   const regenerate = button('Anna 起草大纲', requestOutline, { disabled: !anna || Boolean(job) })
-  const target = field('目标总页数', draft.brief, 'count', { type: 'number', min: 5, max: 30, step: 1, update: () => {
+  const target = field('目标页数', draft.brief, 'count', { type: 'number', min: 5, max: 30, step: 1, update: () => {
     invalidate(draft, [], true)
     changed()
     updateMeter()
@@ -321,7 +322,7 @@ function outlineView() {
   const sectionFields = draft.sections.map((section) => {
     const count = draft.pages.filter(({ sectionId }) => sectionId === section.id).length
     return el('div', { class: 'section-row' },
-      field('章节名', section, 'title', { update: () => { invalidate(draft, draft.pages.filter(({ sectionId }) => sectionId === section.id)); changed(); updateMeter() } }),
+      field('章节名称', section, 'title', { update: () => { invalidate(draft, draft.pages.filter(({ sectionId }) => sectionId === section.id)); changed(); updateMeter() } }),
       text('span', count + ' 页', 'count-label'),
       !count && button('移除空章节', () => mutate(() => { draft.sections = draft.sections.filter(({ id }) => id !== section.id) })))
   })
@@ -336,7 +337,7 @@ function outlineView() {
     return el('article', { class: 'outline-row' },
       text('strong', String(index + 1).padStart(2, '0'), 'index'),
       field('页标题', page, 'planTitle', { update: edited }),
-      field('这一页要让听众明白什么', page, 'goal', { update: edited }),
+      field('主要内容', page, 'goal', { update: edited }),
       field('所属章节', page, 'sectionId', { choices: sectionChoices, update: () => { edited(); render() } }),
       actions(button('上移', () => move(index, -1), { disabled: index <= 1, 'aria-label': '上移第 ' + (index + 1) + ' 页' }),
         button('下移', () => move(index, 1), { disabled: index === 0 || index === draft.pages.length - 1, 'aria-label': '下移第 ' + (index + 1) + ' 页' }),
@@ -359,7 +360,7 @@ function outlineView() {
     card(actions(target, meter), el('details', {}, text('summary', '章节与页数'), sectionFields,
       button('新增章节', () => mutate(() => { draft.sections.push({ id: crypto.randomUUID(), title: '新章节' }) })))),
     el('div', { class: 'outline-list' }, rows),
-    button('新增一页', () => modal('新增一页？', text('p', '会增加一页空计划，已有文字稿随原页保留。请重新核对目标页数。'),
+    button('新增页面', () => modal('新增页面？', text('p', '将在大纲末尾新增一个空白页面。请重新核对目标页数。'),
       () => mutate(() => { draft.pages.push(newPage(draft.sections.at(-1).id)) }))))
 }
 
@@ -398,7 +399,7 @@ function scriptView() {
     const pending = pendingPages(draft).length
     bar.querySelector('.subtle').textContent = '已完成 ' + (draft.pages.length - pending) + ' / ' + draft.pages.length + ' 页 · 正文和讲者备注分别编辑。'
     primary.textContent = job ? '生成中…' : anna && pending ? '继续起草文字稿'
-      : anna && pendingPages(draft, 'visual').length ? '确认文字稿，生成排版' : '确认文字稿，进入视觉'
+      : anna && pendingPages(draft, 'visual').length ? '确认文字稿，生成排版' : '确认文字稿，进入风格'
     primary.disabled = !draft.confirmed || Boolean(job) || !anna && pending > 0
   }
   updateProgress()
@@ -442,7 +443,7 @@ function scriptView() {
         page.notes && text('p', '备注 · ' + page.notes, 'subtle') || '', page.evidence && text('p', '依据 · ' + page.evidence, 'subtle') || '')
     })
   }
-  return el('div', { class: 'narrow' }, bar, pages, preferencesView())
+  return el('div', { class: 'narrow' }, bar, pages)
 }
 function canvas(page, template, index, total, animate = false) {
   const { bg, blocks } = scene(page, template, index, total)
@@ -620,8 +621,7 @@ function editView() {
   return el('div', {}, pageBar(stepNames[4], draft.pages.length + ' 页 · 16:9',
     button(returning ? '返回问题复查' : '审查与导出', returnToReview, { primary: true })),
   el('div', { class: 'edit-grid' }, responsivePanel('pages', '幻灯片导航 · ' + (index + 1) + ' / ' + draft.pages.length, deckNav),
-    stageRegion, responsivePanel('properties', '当前页属性', properties)),
-  preferencesView())
+    stageRegion, responsivePanel('properties', '当前页属性', properties)))
 }
 
 function candidateView(page) {
@@ -721,66 +721,58 @@ function reviewView() {
         void changed({ immediate: true })
       } } }), '我已审阅这些提示')),
     !problems.length && card(text('p', '结构检查通过。可准备 16:9 的可编辑 PPTX。')),
-    list, preferencesView())
+    list)
 }
 
-function preferencesView() {
-  if (!anna) return
+const effortLabels = { minimal: '最少', low: '低', medium: '中', high: '高', xhigh: '很高', max: '最高' }
+
+function renderModelControls(focusId) {
   const settings = draft.preferences
   const selectedModel = catalog.find(({ modelName }) => modelName === settings.model)
   const levels = selectedModel?.capabilities?.thinking?.levels ?? []
-  const labels = { minimal: '最少', low: '低', medium: '中', high: '高', xhigh: '很高', max: '最高' }
   const modelChoices = catalog.length ? {
     '': '平台默认',
     ...Object.fromEntries(catalog.map(({ modelName, displayName }) => [modelName, displayName || modelName])),
-    ...(settings.model && !selectedModel ? { [settings.model]: settings.model + '（当前目录未列出）' } : {}),
+    ...(settings.model && !selectedModel ? { [settings.model]: settings.model } : {}),
   } : undefined
-  return el('details', { class: 'card preferences' }, text('summary', 'Anna 模型与批次'),
-    field('模型偏好', settings, 'model', { choices: modelChoices, placeholder: '留空使用平台默认',
-      help: modelChoices ? 'Anna 会按账号权限和模型可用性路由。' : '目录不可用时可填平台已核对的完整模型 ID。Anna 仍可按可用性路由。', update: () => {
+  const modelField = field('模型', settings, 'model', { id: 'anna-model', choices: modelChoices, placeholder: '平台默认',
+    title: modelChoices ? '选择模型偏好' : '填写完整模型 ID，留空使用平台默认', update: () => {
       settings.supportsThinking = false
       settings.effort = ''
-      if (modelChoices) {
-        changed()
-        render()
-        document.querySelector('.preferences').open = true
-        document.querySelector('.preferences select')?.focus()
-        return
-      }
-      const capability = find('thinking-capability')
-      capability.checked = false
-      capability.disabled = !settings.model.trim()
-      find('thinking-effort').hidden = true
       changed()
-    } }),
-    !modelChoices && el('label', { class: 'check' }, el('input', { type: 'checkbox', id: 'thinking-capability', checked: settings.supportsThinking, disabled: !settings.model.trim(),
-      on: { change: (event) => {
-        settings.supportsThinking = event.currentTarget.checked
-        if (!settings.supportsThinking) settings.effort = ''
-        find('thinking-effort').hidden = !settings.supportsThinking
-        find('thinking-effort').querySelector('select').value = settings.effort
-        changed()
-      } } }), '我已在 Anna 核对该模型支持推理档'),
-    (!modelChoices || levels.length > 0) && el('div', { id: 'thinking-effort', hidden: !modelChoices && !settings.supportsThinking },
-      field('推理档偏好', settings, 'effort', {
-        choices: { '': '交由平台', ...Object.fromEntries((modelChoices ? levels : ['low', 'medium', 'high', 'xhigh']).map((level) => [level, labels[level] ?? level])) },
-        update: () => { settings.supportsThinking = Boolean(settings.effort) || !modelChoices; changed() },
-      })),
-    field('文字稿每批最多页数', settings, 'batchSize', { choices: { 1: '1 页', 2: '2 页', 3: '3 页' } }))
+      if (modelChoices && showThinking) renderModelControls('anna-model')
+    } })
+  const toggle = el('label', { class: 'check' }, el('input', { type: 'checkbox', id: 'anna-show-thinking', checked: showThinking,
+    on: { change: (event) => {
+      showThinking = event.currentTarget.checked
+      renderModelControls('anna-show-thinking')
+      renderAnnaBar()
+    } } }), '显示推理强度')
+  const controls = [modelField, toggle]
+  if (showThinking && levels.length) controls.push(field('推理偏好', settings, 'effort', {
+    choices: { '': '平台默认', ...Object.fromEntries(levels.map((level) => [level, effortLabels[level] ?? level])) },
+    update: () => { settings.supportsThinking = Boolean(settings.effort); changed() },
+  }))
+  find('anna-controls').replaceChildren(...controls)
+  activeModelSettings = settings
+  if (focusId) find(focusId)?.focus({ preventScroll: true })
 }
 
-function usage() {
+function renderAnnaBar() {
+  const bar = find('anna-bar')
+  bar.hidden = !anna || home || !draft
+  if (bar.hidden) return
+  if (activeModelSettings !== draft.preferences) renderModelControls()
   const last = draft.usage.last
-  if (!last) return
-  const display = (value) => value ?? '未返回'
-  const cu = (value) => value === null ? '未返回' : Number(value.toFixed(4)) + ' CU'
-  return el('aside', { class: 'card usage', 'aria-label': 'Anna 用量' },
-    text('strong', 'Anna 最近一次请求'),
-    text('p', '偏好 · ' + (last.preferred || '平台默认') + '　实际模型 · ' + display(last.model) +
-      (last.model && last.preferred && last.model !== last.preferred ? '（与偏好不同）' : '')),
-    text('p', '推理偏好 · ' + (last.requestedEffort || '交由平台') + '　有效推理 · ' + display(last.effort) + '　有效输出上限 · ' + display(last.effectiveTokens)),
-    text('p', '本次 · ' + cu(last.cu) + '　累计已知 · ' + (draft.usage.missing && !draft.usage.total ? '未返回' : cu(draft.usage.total)) +
-      (draft.usage.missing ? '（' + draft.usage.missing + ' 次未返回 CU）' : '')))
+  const cu = (value) => Number.isFinite(value) ? String(Number(value.toFixed(4))) : '—'
+  const fields = [
+    '实际调用模型 ' + (last?.model ?? '—'),
+    '有效输出上限 ' + (last?.effectiveTokens ?? '—'),
+    'CU ' + cu(last?.cu) + (draft.usage.total ? '（累计 ' + cu(draft.usage.total) + '）' : ''),
+  ]
+  if (showThinking) fields.push('有效推理强度 ' + (effortLabels[last?.effort] ?? last?.effort ?? '—'))
+  const receipt = find('anna-usage')
+  if (receipt.textContent !== fields.join('')) receipt.replaceChildren(...fields.map((item) => text('span', item)))
 }
 
 function draftSignature() {
@@ -795,32 +787,28 @@ function progress() {
     }, { disabled: job.stop }))
 }
 
-function paid(title, scope, run) {
+function runAnna(title, run) {
   if (!anna || job || find('dialog').open) return
   try { validateBrief(draft.brief) } catch (error) { return notify(error.message, true) }
-  modal(title, text('p', scope + '。模型偏好为 ' + (draft.preferences.model.trim() || '平台默认') +
-    '。操作会使用 Anna 额度，实际 CU 以平台回执为准。'), () => {
-    const operation = { label: title, stop: false }
-    job = operation
-    candidate = undefined
-    notify()
-    render()
-    void (async () => {
-      try { await run(operation) }
-      catch (error) { notify(operation.label + ' · ' + error.message, true) }
-      finally {
-        job = undefined
-        void changed({ immediate: true })
-        render()
-      }
-    })()
-  })
+  const operation = { label: title, stop: false }
+  job = operation
+  candidate = undefined
+  notify()
+  render()
+  void (async () => {
+    try { await run(operation) }
+    catch (error) { notify(operation.label + ' · ' + error.message, true) }
+    finally {
+      job = undefined
+      void changed({ immediate: true })
+      render()
+    }
+  })()
 }
 
 function requestOutline() {
   const existing = hasOutlineWork(draft)
-  paid('Anna 起草大纲', '预计 1 次调用，返回格式或页数有误时最多自动修正 1 次' +
-    (existing ? '。新结构作为候选，采纳时替换现有大纲和逐页稿' : ''), async (op) => {
+  runAnna('Anna 起草大纲', async (op) => {
     go(1)
     const before = draftSignature()
     let result
@@ -852,14 +840,13 @@ function requestOutline() {
 function requestBatches(kind, ids, enter) {
   const visual = kind === 'visual'
   if (!ids.length || !enter && !(visual ? draft.scriptConfirmed : draft.confirmed)) return
-  const size = Number(draft.preferences.batchSize)
   const title = visual ? 'Anna 生成初始排版' : 'Anna 起草文字稿'
-  paid(title, '选择 ' + ids.length + ' 页，预计 ' + batchPlan(draft, ids, size, kind) + ' 批', async (op) => {
+  runAnna(title, async (op) => {
     enter?.()
     const before = draftSignature()
     const settings = JSON.stringify(draft.preferences)
     let batch
-    while (!op.stop && before === draftSignature() && settings === JSON.stringify(draft.preferences) && (batch = nextBatch(draft, ids, size, kind)).length) {
+    while (!op.stop && before === draftSignature() && settings === JSON.stringify(draft.preferences) && (batch = nextBatch(draft, ids, kind)).length) {
       const numbers = batch.map((page) => draft.pages.indexOf(page) + 1)
       op.label = title + ' · 正在处理第 ' + numbers.join('、') + ' 页 · 已完成 ' + (draft.pages.length - pendingPages(draft, kind).length) + ' / ' + draft.pages.length
       render()
@@ -885,14 +872,14 @@ function requestBatches(kind, ids, enter) {
       }
     }
     if (op.stop) notify('已停止后续批次，可继续尚未完成的页面。')
-    else if (settings !== JSON.stringify(draft.preferences)) notify('已暂停。可使用新的模型或批次偏好继续。')
+    else if (settings !== JSON.stringify(draft.preferences)) notify('已暂停，可使用新的模型设置继续。')
   })
 }
 
 function requestRewrite(page) {
   if (!rewrite.trim()) return notify('请输入本页修改要求。', true)
   if (!draft.confirmed) return notify('请先确认已修改的大纲。', true)
-  paid('Anna 生成单页候选', '只重写第 ' + (draft.pages.indexOf(page) + 1) + ' 页，预计 1 次调用', async (op) => {
+  runAnna('Anna 重写第 ' + (draft.pages.indexOf(page) + 1) + ' 页', async (op) => {
     const before = JSON.stringify(page)
     const signature = draftSignature()
     const [result] = await complete(anna, 'rewrite', draft, [page], rewrite)
@@ -904,7 +891,7 @@ function requestRewrite(page) {
 }
 
 function requestReview() {
-  paid('Anna 语义评审', '审阅全部 ' + draft.pages.length + ' 页，预计 1 次调用', async (op) => {
+  runAnna('Anna 语义评审', async (op) => {
     const before = JSON.stringify([draftSignature(), draft.pages])
     const result = await complete(anna, 'review', draft, draft.pages)
     if (op.stop || before !== JSON.stringify([draftSignature(), draft.pages])) return notify('评审结果已过期，当前编辑已保留。')

@@ -16,7 +16,7 @@ export function readDraft(value) {
       Array.isArray(p.visual) && p.visual.every((item) => strings(item, ['label']) && (item.detail === undefined || typeof item.detail === 'string') &&
         (item.value === undefined || typeof item.value === 'number' || typeof item.value === 'string'))) || !unique(value.pages) ||
     !Array.isArray(value.batches) || !Array.isArray(value.review) || !value.review.every((entry) => strings(entry, ['id', 'quote', 'reason', 'suggestion', 'evidence'])) ||
-    !strings(value.preferences, ['model', 'effort']) || ![1, 2, 3].includes(Number(value.preferences.batchSize)) ||
+    !strings(value.preferences, ['model', 'effort']) ||
     !Number.isFinite(value.usage?.total) || !Number.isInteger(value.usage?.missing) ||
     !Number.isInteger(value.step) || value.step < 0 || value.step > 5) throw new Error('草稿结构损坏。可下载原始副本供恢复。')
   if (!value.pages.some(({ id }) => id === value.current)) value.current = value.pages[0]?.id ?? null

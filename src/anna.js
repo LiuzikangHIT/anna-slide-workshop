@@ -93,7 +93,7 @@ function parseOutline(data, brief) {
   const pages = rows.map((row, i) => {
     const title = requiredString(row?.title ?? row?.heading)
     const goal = requiredString(row?.goal ?? row?.objective ?? row?.takeaway)
-    if (!title || !goal) throw new OutlineResponseError('大纲第 ' + (i + 1) + ' 页缺少' + (title ? '演示目标' : '标题'))
+    if (!title || !goal) throw new OutlineResponseError('大纲第 ' + (i + 1) + ' 页缺少' + (title ? '主要内容' : '标题'))
     const section = requiredString(row?.section) || (brief.language === 'en' ? 'Main section' : '主要章节')
     if (!sections.has(section)) sections.set(section, { id: crypto.randomUUID(), title: section })
     return newPage(sections.get(section).id, title, goal, i === 0 ? 'cover' : i === count - 1 ? 'action' : 'evidence')

@@ -24,7 +24,7 @@ export function localReview(draft, measure = fits) {
   const known = [draft.brief.source, draft.brief.required].join('\n')
   const text = draft.pages.map(({ title, body, notes }) => [title, body, notes].join('\n')).join('\n')
   for (const required of draft.brief.required.split(/\n+/).map((s) => s.trim()).filter(Boolean)) {
-    if (!text.toLowerCase().includes(required.toLowerCase())) add(null, required, '必讲项未找到原文，可能遗漏或已改写。', '检查大纲和备注，补充或核对对应表述。')
+    if (!text.toLowerCase().includes(required.toLowerCase())) add(null, required, '未找到必讲内容的原文，可能遗漏或已改写。', '检查大纲和备注，补充或核对对应表述。')
   }
   for (const section of draft.sections) {
     const pages = draft.pages.filter(({ sectionId }) => sectionId === section.id)

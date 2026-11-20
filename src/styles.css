@@ -29,7 +29,7 @@ button.primary, .button.primary { color: #fff; background: var(--accent); border
 button.primary:hover:enabled, .button.primary:hover { background: #084d42; }
 button[aria-pressed="true"], button[aria-current="page"] { border-color: var(--accent); background: var(--pale); color: #0a5045; }
 .topbar { position: sticky; top: 0; z-index: 4; background: var(--paper); border-bottom: 1px solid var(--line); }
-.masthead, .steps { padding-inline: clamp(12px, 2.5vw, 32px); max-width: 1500px; margin: auto; }
+.masthead, .anna-bar, .steps { padding-inline: clamp(12px, 2.5vw, 32px); max-width: 1500px; margin: auto; }
 .masthead { min-height: 56px; display: flex; align-items: center; gap: 14px; }
 .brand { gap: 8px; flex: 0 0 auto; border: 0; background: transparent; padding-inline: 0; white-space: nowrap; font-size: 1.12rem; }
 .brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); display: grid; place-items: center; }
@@ -39,6 +39,14 @@ button[aria-pressed="true"], button[aria-current="page"] { border-color: var(--a
 .mast-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; text-align: right; }
 #save { font-size: .83rem; color: var(--muted); }
 .topbar .mast-actions button { min-height: 30px; padding: 3px 7px; font-size: .83rem; }
+.anna-bar, .anna-controls, .anna-usage { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
+.anna-bar { padding-block: 5px; border-block: 1px solid var(--line); }
+.anna-controls, .anna-usage { font-size: .86rem; }
+.anna-controls .field { display: flex; align-items: center; gap: 5px; margin: 0; }
+.anna-controls .field span { white-space: nowrap; }
+.anna-controls .field :is(select, input) { width: auto; max-width: 165px; min-height: 28px; padding: 2px 6px; }
+.anna-controls #anna-model { width: 142px; }
+.anna-usage { color: var(--muted); overflow-wrap: anywhere; }
 .steps { display: flex; overflow: auto; gap: 8px; }
 .steps button { border: 0; border-radius: 0; background: transparent; border-bottom: 3px solid transparent; white-space: nowrap; padding: 4px 11px; min-height: 36px; }
 .steps button[aria-current="step"] { border-color: var(--accent); color: var(--accent); background: #eff7f1; }
@@ -72,7 +80,7 @@ main { max-width: 1500px; margin: auto; padding: clamp(12px, 2.5vw, 32px); min-w
 .field textarea { resize: vertical; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 summary { cursor: pointer; padding-block: 5px; }
-details > .fields, details > .field, .preferences .check { margin-top: 7px; }
+details > .fields, details > .field { margin-top: 7px; }
 .check { display: flex; align-items: baseline; gap: 6px; }
 .check input { accent-color: var(--accent); }
 .section-row { display: grid; grid-template-columns: minmax(120px, 280px) auto 1fr; gap: 10px; align-items: center; padding-block: 5px; }
@@ -115,10 +123,9 @@ details > .fields, details > .field, .preferences .check { margin-top: 7px; }
 .bar-track i { height: 100%; display: block; }
 .candidate-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
 .candidate-grid > div { background: #eef4ee; padding: 10px; min-width: 0; }
-.job, .usage, .preferences { margin-top: 12px; }
 .job { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.usage { font-size: .86rem; color: var(--muted); }
 .issue { scroll-margin-top: 125px; }
+.topbar:has(.anna-bar:not([hidden])) ~ main .issue { scroll-margin-top: 178px; }
 .issue blockquote { margin: 9px 0; border-left: 3px solid var(--line); padding-left: 10px; }
 .issue button, #export-output:not(:empty) { margin-top: 8px; margin-bottom: 8px; }
 .system-status {
