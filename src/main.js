@@ -1,5 +1,5 @@
-import { batchPlan, exampleDraft, invalidate, layouts, makeOutline, newDraft, newPage, nextBatch, outlineProblem, pageCount, pendingPages, scenarios, validateBrief } from './deck.js'
-import { complete } from './anna.js'
+import { batchPlan, exampleDraft, hasOutlineWork, invalidate, layouts, makeOutline, newDraft, newPage, nextBatch, outlineProblem, pageCount, pendingPages, scenarios, validateBrief } from './deck.js'
+import { complete, OutlineResponseError } from './anna.js'
 import { apsStore, readDraft, saving } from './storage.js'
 import { fits, height, recommended, scene, templates, width } from './visual.js'
 import { localReview } from './review.js'
@@ -114,6 +114,7 @@ function modal(title, body, ok) {
 function go(step, focus = true) {
   if (step >= 2 && !draft.pages.length) return
   if (step >= 3 && !draft.scriptConfirmed && !draft.designReached) return
+  if (step >= 4 && !draft.designReached && pendingPages(draft, 'visual').length) return
   home = false
   draft.step = step
   void changed({ immediate: true })
@@ -203,7 +204,8 @@ function render(focus = false) {
   else {
     stepNav.replaceChildren(...stepNames.map((name, index) => button(name, () => go(index), {
       'aria-current': draft.step === index ? 'step' : undefined,
-      disabled: index >= 2 && !draft.pages.length || index >= 3 && !draft.scriptConfirmed && !draft.designReached,
+      disabled: index >= 2 && !draft.pages.length || index >= 3 && !draft.scriptConfirmed && !draft.designReached ||
+        index >= 4 && !draft.designReached && pendingPages(draft, 'visual').length > 0,
     })))
     workspace.replaceChildren(...[views[draft.step](), job && progress(), usage()].filter(Boolean))
     stepNav.querySelector('[aria-current]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -234,11 +236,21 @@ function usePayload(value) {
 
 function briefView() {
   const model = draft.brief
+  const canStart = () => anna && !hasOutlineWork(draft)
+  const primary = button('', () => {
+    try { validateBrief(model) } catch (error) { notify(error.message, true); return }
+    if (canStart()) requestOutline()
+    else if (draft.pages.length) go(1)
+    else startManualOutline()
+  }, { primary: true, disabled: Boolean(job) })
+  const updatePrimary = () => { primary.textContent = canStart() ? '用 Anna 起草大纲' : '进入大纲' }
+  updatePrimary()
   function edit(control) {
     invalidate(draft)
     changed()
     if (control.name === 'count') validateCount(control)
     find('project').textContent = model.topic || '未命名演示'
+    updatePrimary()
   }
   const count = field('总页数', model, 'count', { name: 'count', type: 'number', min: 5, max: 30, step: 1, 'aria-describedby': 'count-error', update: edit })
   const countError = el('small', { id: 'count-error', class: 'warning', role: 'status' })
@@ -265,23 +277,28 @@ function briefView() {
         void changed({ immediate: true })
         render()
       })))
-  const next = () => {
-    try { validateBrief(model) } catch (error) { notify(error.message, true); return }
-    if (!draft.pages.length) {
-      draft.template = recommended[model.scenario]?.[0] ?? 'briefing'
-      Object.assign(draft, makeOutline(draft, 'manual'))
-      draft.current = draft.pages[0].id
-    }
-    go(1)
-  }
   return el('div', { class: 'narrow' },
-    pageBar(stepNames[0], '只填主题即可开始。总页数包含封面、过渡及结尾。', button('进入大纲', next, { primary: true })),
+    pageBar(stepNames[0], '只填主题即可开始。总页数包含封面、过渡及结尾。', primary),
     fields, preferencesView())
+}
+
+function startManualOutline() {
+  try { Object.assign(draft, makeOutline(draft, 'manual')) } catch (error) { notify(error.message, true); return }
+  draft.template = recommended[draft.brief.scenario]?.[0] ?? 'briefing'
+  draft.current = draft.pages[0].id
+  go(1)
 }
 
 function outlineView() {
   if (!draft.pages.length) return el('div', { class: 'narrow' },
-    pageBar(stepNames[1], '先提交演示需求，以建立可编辑的大纲。', button('填写演示需求', () => go(0), { primary: true })))
+    pageBar(stepNames[1], 'Anna 会生成逐页标题、目标和章节，起草完成后可修改。',
+      anna && draft.brief.topic.trim() ? button(job ? '正在起草大纲…' : '用 Anna 起草大纲', requestOutline, { primary: true, disabled: Boolean(job) })
+        : button('填写演示需求', () => go(0), { primary: true }),
+      anna && draft.brief.topic.trim() && button('手工编写大纲', startManualOutline, { disabled: Boolean(job) })),
+    preferencesView())
+  const start = () => anna && !hasOutlineWork(draft)
+  const primary = button('', () => start() ? requestOutline() : confirm(), { primary: true, disabled: Boolean(job) })
+  const regenerate = button('Anna 起草大纲', requestOutline, { disabled: !anna || Boolean(job) })
   const target = field('目标总页数', draft.brief, 'count', { type: 'number', min: 5, max: 30, step: 1, update: () => {
     invalidate(draft, [], true)
     changed()
@@ -290,6 +307,9 @@ function outlineView() {
   const meter = el('p', { role: 'status' })
   function updateMeter() {
     meter.textContent = '已规划 ' + draft.pages.length + ' / 目标 ' + (draft.brief.count || '—') + '。' + outlineProblem(draft)
+    primary.textContent = start() ? '用 Anna 起草大纲'
+      : anna && pendingPages(draft).length ? '确认大纲，生成文字稿' : '确认大纲，进入文字稿'
+    regenerate.hidden = !anna || Boolean(start())
   }
   updateMeter()
   const mutate = (fn, affected = []) => {
@@ -329,13 +349,13 @@ function outlineView() {
   const confirm = () => {
     const problem = outlineProblem(draft)
     if (problem) return notify(problem, true)
-    draft.confirmed = true
-    go(2)
+    const enter = () => { draft.confirmed = true; go(2) }
+    if (anna && pendingPages(draft).length) requestBatches('script', pendingPages(draft).map(({ id }) => id), enter)
+    else enter()
   }
   return el('div', {},
-    pageBar(stepNames[1], '封面固定在首位。重新排序时，文字与备注跟随原页。', button('确认大纲，进入文字稿', confirm, { primary: true }),
-      returning && button('返回问题复查', returnToReview),
-      button('Anna 起草大纲', () => requestOutline(), { disabled: !anna || Boolean(job) })),
+    pageBar(stepNames[1], '封面固定在首位。重新排序时，文字与备注跟随原页。', primary,
+      returning && button('返回问题复查', returnToReview), regenerate),
     card(actions(target, meter), el('details', {}, text('summary', '章节与页数'), sectionFields,
       button('新增章节', () => mutate(() => { draft.sections.push({ id: crypto.randomUUID(), title: '新章节' }) })))),
     el('div', { class: 'outline-list' }, rows),
@@ -361,17 +381,25 @@ function scriptView() {
     if (!draft.confirmed) return notify('请先确认大纲。', true)
     const remaining = pendingPages(draft)
     if (remaining.length) return notify('还有 ' + remaining.length + ' 页缺稿或待更新。', true)
-    draft.scriptConfirmed = true
-    draft.designReached = true
-    go(3)
+    const enter = () => { draft.scriptConfirmed = true; go(3) }
+    if (anna && pendingPages(draft, 'visual').length) requestBatches('visual', pendingPages(draft, 'visual').map(({ id }) => id), enter)
+    else {
+      draft.designReached = true
+      enter()
+    }
   }
-  const generate = button('Anna 起草或继续', () => requestScript(pendingPages(draft).map(({ id }) => id)))
-  const bar = pageBar(stepNames[2], '文字稿进度', button('确认文字稿，进入视觉', confirm, { primary: true }),
-    returning && button('返回问题复查', returnToReview), generate)
+  const primary = button('', () => {
+    const pending = pendingPages(draft)
+    if (anna && pending.length) requestBatches('script', pending.map(({ id }) => id))
+    else confirm()
+  }, { primary: true })
+  const bar = pageBar(stepNames[2], '文字稿进度', primary, returning && button('返回问题复查', returnToReview))
   const updateProgress = () => {
     const pending = pendingPages(draft).length
     bar.querySelector('.subtle').textContent = '已完成 ' + (draft.pages.length - pending) + ' / ' + draft.pages.length + ' 页 · 正文和讲者备注分别编辑。'
-    generate.disabled = !anna || !draft.confirmed || !pending || Boolean(job)
+    primary.textContent = job ? '生成中…' : anna && pending ? '继续起草文字稿'
+      : anna && pendingPages(draft, 'visual').length ? '确认文字稿，生成排版' : '确认文字稿，进入视觉'
+    primary.disabled = !draft.confirmed || Boolean(job) || !anna && pending > 0
   }
   updateProgress()
   const pages = draft.pages.map((page, index) => {
@@ -405,7 +433,7 @@ function scriptView() {
       el('div', { class: 'script-read' }, el('strong', {}, page.title || '标题待填写'),
         text('p', page.body || '正文待填写'), page.notes && text('p', '备注 · ' + page.notes, 'subtle'),
         page.evidence && text('p', '依据 · ' + page.evidence, 'subtle')),
-      tag, page.stale && button('Anna 更新此页', () => requestScript([page.id]), { disabled: !draft.confirmed || !anna || Boolean(job) }))
+      tag, page.stale && button('Anna 更新此页', () => requestBatches('script', [page.id]), { disabled: !draft.confirmed || !anna || Boolean(job) }))
   })
   for (const article of pages) {
     article.addEventListener('input', () => {
@@ -471,7 +499,11 @@ function pagePicker(page, update) {
 function layoutFields(page, update) {
   const index = draft.pages.indexOf(page)
   const offered = index === 0 ? { cover: layouts.cover } : Object.fromEntries(Object.entries(layouts).slice(1))
-  function refresh() { void changed({ immediate: true, content: true }); render() }
+  function refresh() {
+    page.designed = true
+    void changed({ immediate: true, content: true })
+    render()
+  }
   const chart = page.layout === 'chart'
   const visual = chart || page.layout === 'steps' || page.layout === 'compare'
   const previous = page.layout
@@ -503,9 +535,13 @@ function designView() {
   const index = draft.pages.indexOf(page)
   const first = recommended[draft.brief.scenario] ?? recommended.report
   const choices = [...first, ...Object.keys(templates).filter((id) => !first.includes(id))]
+  const pending = pendingPages(draft, 'visual')
+  const edit = () => { draft.designReached = true; go(4) }
   return el('div', {},
-    pageBar(stepNames[3], '可在四套模板间切换。所有模板均支持六种版式，原稿与讲者备注随页面保留。',
-      button('进入排版', () => go(4), { primary: true })),
+    pageBar(stepNames[3], pending.length && anna ? '还有 ' + pending.length + ' 页待生成初始排版。' : '可切换模板、修改版式和图示。原稿与讲者备注随页面保留。',
+      anna && pending.length ? button(job ? '正在生成排版…' : '继续生成排版', () => requestBatches('visual', pending.map(({ id }) => id)),
+        { primary: true, disabled: !draft.scriptConfirmed || Boolean(job) }) : button('进入排版', edit, { primary: true }),
+      anna && pending.length && !job && button('保留当前版式，手工调整', edit)),
     el('div', { class: 'design-grid' }, el('div', {},
       el('div', { class: 'panel-head' }, el('h2', { id: 'active-page', tabindex: '-1' }, '模板 · 第 ' + (index + 1) + ' 页'), pagePicker(page, selectPage)),
       el('div', { class: 'template-grid' }, choices.map((id) => el('div', { class: 'template' },
@@ -513,12 +549,14 @@ function designView() {
         el('div', { class: 'template-info' },
           button(templates[id].name, () => {
             draft.template = id
+            draft.templateChosen = true
             void changed({ immediate: true, content: true })
             render()
             document.querySelector('[data-template="' + id + '"]')?.focus({ preventScroll: true })
           }, { 'aria-pressed': String(id === draft.template), 'data-template': id }),
           text('p', (first.includes(id) ? '场景推荐 · ' : '') + templates[id].description, 'subtle')))))),
     card(text('h2', '本页版式'), layoutFields(page, () => {
+      page.designed = true
       changed({ content: true })
       document.querySelectorAll('.template .slide').forEach((node, i) => node.replaceWith(canvas(page, choices[i], index, draft.pages.length)))
     }))))
@@ -557,7 +595,7 @@ function editView() {
   const revision = { instruction: rewrite }
   const properties = el('div', { class: 'property-fields' },
     editorFields(page, refresh),
-    el('details', { open: true }, text('summary', '布局与图示'), layoutFields(page, refresh)),
+    el('details', { open: true }, text('summary', '布局与图示'), layoutFields(page, () => { page.designed = true; refresh() })),
     anna && el('details', { open: Boolean(candidate) }, text('summary', '只重写本页'),
       field('修改要求', revision, 'instruction', { rows: 2, placeholder: '例如：标题先说说服听众的理由', update: () => { rewrite = revision.instruction } }),
       button('生成候选', () => requestRewrite(page), { disabled: Boolean(job) })),
@@ -780,14 +818,26 @@ function paid(title, scope, run) {
 }
 
 function requestOutline() {
-  const existing = draft.pages.some(({ written, planTitle, goal }, i) => written || goal.trim() || i > 0 && planTitle.trim())
-  paid('Anna 起草大纲', '预计 1 次调用' + (existing ? '，新结构作为候选，采纳时替换现有大纲和逐页稿' : ''), async (op) => {
+  const existing = hasOutlineWork(draft)
+  paid('Anna 起草大纲', '预计 1 次调用，返回格式或页数有误时最多自动修正 1 次' +
+    (existing ? '。新结构作为候选，采纳时替换现有大纲和逐页稿' : ''), async (op) => {
+    go(1)
     const before = draftSignature()
-    const result = await complete(anna, 'outline', draft, [])
+    let result
+    try {
+      result = await complete(anna, 'outline', draft, [])
+    } catch (error) {
+      if (op.stop || before !== draftSignature()) return notify('大纲请求已结束，当前编辑已保留。')
+      if (!(error instanceof OutlineResponseError)) throw error
+      op.label = 'Anna 正在修正大纲'
+      render()
+      result = await complete(anna, 'outline', draft, [], error.message)
+    }
     if (op.stop || before !== draftSignature()) return notify('大纲结果已过期，当前编辑已保留。')
     const apply = () => {
       if (before !== draftSignature()) return notify('大纲已修改，当前编辑已保留。')
-      Object.assign(draft, result, { current: result.pages[0].id, batches: [], designReached: false })
+      Object.assign(draft, result, { current: result.pages[0].id, batches: [], designReached: false, step: 1 })
+      if (!draft.templateChosen) draft.template = recommended[draft.brief.scenario]?.[0] ?? 'briefing'
       invalidate(draft)
       void changed({ immediate: true })
       render()
@@ -799,26 +849,36 @@ function requestOutline() {
   })
 }
 
-function requestScript(ids) {
-  if (!draft.confirmed || !ids.length) return
+function requestBatches(kind, ids, enter) {
+  const visual = kind === 'visual'
+  if (!ids.length || !enter && !(visual ? draft.scriptConfirmed : draft.confirmed)) return
   const size = Number(draft.preferences.batchSize)
-  paid('Anna 起草文字稿', '选择 ' + ids.length + ' 页，预计 ' + batchPlan(draft, ids, size) + ' 批', async (op) => {
+  const title = visual ? 'Anna 生成初始排版' : 'Anna 起草文字稿'
+  paid(title, '选择 ' + ids.length + ' 页，预计 ' + batchPlan(draft, ids, size, kind) + ' 批', async (op) => {
+    enter?.()
     const before = draftSignature()
     const settings = JSON.stringify(draft.preferences)
     let batch
-    while (!op.stop && before === draftSignature() && settings === JSON.stringify(draft.preferences) && (batch = nextBatch(draft, ids, size)).length) {
+    while (!op.stop && before === draftSignature() && settings === JSON.stringify(draft.preferences) && (batch = nextBatch(draft, ids, size, kind)).length) {
       const numbers = batch.map((page) => draft.pages.indexOf(page) + 1)
-      op.label = '正在处理第 ' + numbers.join('、') + ' 页 · 已完成 ' + (draft.pages.length - pendingPages(draft).length) + ' / ' + draft.pages.length
+      op.label = title + ' · 正在处理第 ' + numbers.join('、') + ' 页 · 已完成 ' + (draft.pages.length - pendingPages(draft, kind).length) + ' / ' + draft.pages.length
       render()
       const pagesBefore = JSON.stringify(batch)
-      const targets = batch.map(({ id, planTitle, goal }) => ({ id, planTitle, goal }))
-      const results = await complete(anna, 'script', draft, targets)
+      const targets = batch.map(({ id, planTitle, goal, title, body, evidence }, i) =>
+        visual ? { id, position: numbers[i], title, body, evidence } : { id, planTitle, goal })
+      const result = await complete(anna, kind, draft, targets)
       if (op.stop || before !== draftSignature() || pagesBefore !== JSON.stringify(batch)) {
         notify('当前批次结果已过期，已有稿件已保留。')
         break
       }
-      results.forEach((result, i) => Object.assign(batch[i], result))
-      draft.batches.push({ ids: results.map(({ id }) => id), completedAt: new Date().toISOString() })
+      const results = visual ? result.pages : result
+      if (visual && !draft.templateChosen && result.template) {
+        draft.template = result.template
+        draft.templateChosen = true
+      }
+      results.forEach((page, i) => Object.assign(batch[i], page))
+      if (visual && !pendingPages(draft, 'visual').length) draft.designReached = true
+      draft.batches.push({ kind, ids: results.map(({ id }) => id), completedAt: new Date().toISOString() })
       if (await changed({ immediate: true, content: true }) === false) {
         notify('批次已合入当前窗口，Anna 保存失败。请先重试保存，再继续。', true)
         break

@@ -20,6 +20,9 @@ export function readDraft(value) {
     !Number.isFinite(value.usage?.total) || !Number.isInteger(value.usage?.missing) ||
     !Number.isInteger(value.step) || value.step < 0 || value.step > 5) throw new Error('草稿结构损坏。可下载原始副本供恢复。')
   if (!value.pages.some(({ id }) => id === value.current)) value.current = value.pages[0]?.id ?? null
+  // 已进入设计的旧稿沿用现有版式，新稿只补齐尚未排版的页面
+  value.templateChosen ??= Boolean(value.designReached)
+  for (const page of value.pages) page.designed ??= Boolean(value.designReached)
   return value
 }
 

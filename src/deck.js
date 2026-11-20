@@ -17,7 +17,7 @@ export function newDraft() {
   return {
     version: 1, brief: { topic: '', audience: '', goal: '', source: '', required: '', scenario: 'report', count: '7', language: 'zh' },
     sections: [], pages: [], confirmed: false, scriptConfirmed: false, designReached: false, step: 0, current: null,
-    template: 'briefing', transition: 'none', batches: [], review: [], acknowledged: false,
+    template: 'briefing', templateChosen: false, transition: 'none', batches: [], review: [], acknowledged: false,
     preferences: { model: '', supportsThinking: false, effort: '', batchSize: 3 }, usage: { total: 0, missing: 0, last: null },
   }
 }
@@ -26,7 +26,7 @@ export function newPage(sectionId, title = '', goal = '', layout = 'evidence') {
   return {
     id: crypto.randomUUID(), sectionId, planTitle: title, goal,
     title: '', body: '', notes: '', evidence: '', visual: [], unit: '', visualSource: '',
-    layout, density: 'normal', align: 'template', written: false, stale: false,
+    layout, density: 'normal', align: 'template', written: false, stale: false, designed: false,
   }
 }
 
@@ -70,7 +70,7 @@ export function exampleDraft(count = 12, language = 'zh') {
   draft.pages.forEach((page, i) => {
     if (i > 0 && i < count - 1) page.planTitle = en ? 'Pilot decision · ' + i : topics[(i - 1) % topics.length] + (i > topics.length ? ' · ' + i : '')
     Object.assign(page, {
-      written: true, title: page.planTitle,
+      written: true, designed: true, title: page.planTitle,
       body: i === 0 ? draft.brief.goal : i === count - 1 ? (en ? 'Confirm the owner and review date.' : '确认试点负责人与复盘时间。')
         : en ? enBodies[(i - 1) % enBodies.length] : '记录分派与处理时长。\n高优先级工单须由主管确认升级。',
       notes: en ? 'Read the full pause criteria to the audience. ' + pause : '先说明样本范围，再请与会者确认负责人。提醒听众，本周工单记录来自试点队列，结论需要在其他队列复查。',
@@ -88,6 +88,7 @@ export function exampleDraft(count = 12, language = 'zh') {
   }
   draft.confirmed = draft.scriptConfirmed = true
   draft.designReached = true
+  draft.templateChosen = true
   draft.current = draft.pages[0].id
   draft.step = 3
   return draft
@@ -111,17 +112,27 @@ export function outlineProblem(draft) {
   return ''
 }
 
-export function pendingPages(draft) {
-  return draft.pages.filter(({ written, stale }) => !written || stale)
+export function hasOutlineWork(draft) {
+  if (!draft.pages.length) return false
+  const placeholderSection = draft.brief.language === 'en' ? 'Main section' : '主要章节'
+  return draft.sections.length !== 1 || draft.sections[0].title.trim() !== placeholderSection ||
+    draft.pages.length !== Number(draft.brief.count) ||
+    draft.pages.some(({ written, planTitle, goal }, index) =>
+      written || goal.trim() || Boolean(planTitle.trim() && (index !== 0 || planTitle.trim() !== draft.brief.topic.trim())))
 }
 
-export function nextBatch(draft, ids, size) {
-  const pending = pendingPages(draft).filter(({ id }) => ids.includes(id))
+export function pendingPages(draft, kind = 'script') {
+  return draft.pages.filter(({ written, stale, designed }) => kind === 'visual' ? written && !stale && !designed : !written || stale)
+}
+
+export function nextBatch(draft, ids, size, kind) {
+  const pending = pendingPages(draft, kind).filter(({ id }) => ids.includes(id))
   return pending.filter(({ sectionId }) => sectionId === pending[0]?.sectionId).slice(0, size)
 }
 
-export function batchPlan(draft, ids, size) {
+export function batchPlan(draft, ids, size, kind) {
+  const pending = pendingPages(draft, kind).filter(({ id }) => ids.includes(id))
   return draft.sections.reduce((total, { id }) => total + Math.ceil(
-    pendingPages(draft).filter((page) => page.sectionId === id && ids.includes(page.id)).length / size
+    pending.filter((page) => page.sectionId === id).length / size
   ), 0)
 }

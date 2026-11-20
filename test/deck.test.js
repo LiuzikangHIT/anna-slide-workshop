@@ -4,8 +4,8 @@ import { runInNewContext } from 'node:vm'
 import test from 'node:test'
 import JSZip from 'jszip'
 import PptxGenJS from 'pptxgenjs'
-import { batchPlan, exampleDraft, invalidate, makeOutline, newDraft, nextBatch, outlineProblem, pageCount, pendingPages } from '../src/deck.js'
-import { complete, makeRequest, parseResponse } from '../src/anna.js'
+import { batchPlan, exampleDraft, hasOutlineWork, invalidate, makeOutline, newDraft, nextBatch, outlineProblem, pageCount, pendingPages } from '../src/deck.js'
+import { complete, makeRequest, OutlineResponseError, parseResponse } from '../src/anna.js'
 import { createPptx, deckFilename } from '../src/pptx.js'
 import { localReview } from '../src/review.js'
 import { apsStore, readDraft, saving } from '../src/storage.js'
@@ -72,6 +72,96 @@ test('大纲校验总页数和字段，按稳定 ID 保留人工稿和备注', (
   assert.deepEqual(pendingPages(draft).map(({ id }) => id), [original.id])
   assert.equal(original.written, true)
   assert.ok(original.notes)
+})
+
+test('大纲兼容 Markdown 包装、分段文本、旧章节结构和乱序页码', async () => {
+  const draft = exampleDraft(5)
+  const rows = Array.from({ length: 5 }, (_, i) => ({
+    slot: String(i + 1), section: i < 2 ? '背景' : '开展试点', heading: '标题 ' + (i + 1), objective: '试点目标 ' + (i + 1),
+  }))
+  const payload = JSON.parse(makeRequest('outline', draft).messages[0].content.text)
+  assert.deepEqual(payload.slots, [1, 2, 3, 4, 5])
+  assert.equal(payload.brief.count, 5)
+  const reply = {
+    content: [
+      { type: 'thinking', text: '中间推理' },
+      { type: 'text', text: '起草完成。\n\x60\x60\x60JSON\n' },
+      { type: 'text', text: JSON.stringify({ pages: [...rows].reverse() }) + '\n\x60\x60\x60\n共五页。' },
+    ],
+  }
+  const result = parseResponse('outline', reply, [], draft)
+  assert.deepEqual(result.sections.map(({ title }) => title), ['背景', '开展试点'])
+  assert.deepEqual(result.pages.map(({ planTitle }) => planTitle), rows.map(({ heading }) => heading))
+  assert.equal(result.pages[0].layout, 'cover')
+  assert.equal(result.pages[4].layout, 'action')
+  const legacy = { sections: [{ title: '统一章节', slides: rows.map(({ heading, objective }) => ({ title: heading, goal: objective })) }] }
+  assert.equal(parseResponse('outline', response(legacy), [], draft).pages.length, 5)
+  const longer = exampleDraft(24)
+  assert.equal(parseResponse('outline', response({ sections: [{
+    title: '统一章节', pages: longer.pages.map(({ planTitle, goal }) => ({ title: planTitle, goal })),
+  }] }), [], longer).pages.length, 24)
+  await assert.rejects(complete(mocked(async () => response({ pages: rows.slice(0, 4) })), 'outline', draft, []),
+    { name: 'Error', message: /返回 4 页，目标为 5 页/ })
+  assert.throws(() => parseResponse('outline', response({ pages: [...rows.slice(0, 4), rows[0]] }), [], draft), /页码/)
+  assert.throws(() => parseResponse('outline', response({ pages: rows.map(({ objective, ...row }) => row) }), [], draft), /第 1 页缺少演示目标/)
+  assert.throws(() => parseResponse('outline', { content: { text: '待整理' } }, [], draft), OutlineResponseError)
+  assert.equal(draft.usage.missing, 1)
+  const correction = JSON.parse(makeRequest('outline', draft, [], '大纲返回 4 页').messages[0].content.text)
+  assert.equal(correction.correction, '大纲返回 4 页')
+})
+
+test('Anna 排版填充图示，数据图仅使用有单位和原文依据的数值', async () => {
+  const draft = exampleDraft(5)
+  for (const page of draft.pages) page.designed = false
+  const compare = { id: draft.pages[1].id, position: 2 }
+  const chart = { id: draft.pages[3].id, position: 4 }
+  const rows = [
+    { id: chart.id, layout: 'chart', unit: '分钟', visualSource: '分派 42 分钟，处理 18 分钟', visual: [{ label: '分派', value: 42 }, { label: '处理', value: 18 }] },
+    { id: compare.id, layout: 'compare', align: 'left', density: 'compact', visual: [{ label: '现状', detail: '人工分派' }, { label: '试点', detail: '另开队列' }] },
+  ]
+  const result = await complete(mocked(async (request) => {
+    const payload = JSON.parse(request.messages[0].content.text)
+    assert.equal(payload.targets.length, 2)
+    assert.equal(payload.targets[0].position, 2)
+    return response({ template: 'editorial', pages: rows })
+  }), 'visual', draft, [compare, chart])
+  assert.equal(result.template, 'editorial')
+  assert.deepEqual(result.pages.map(({ layout }) => layout), ['compare', 'chart'])
+  assert.equal(result.pages[0].visual[1].detail, '另开队列')
+  assert.ok(result.pages.every(({ designed }) => designed))
+  for (const page of result.pages) Object.assign(draft.pages.find(({ id }) => id === page.id), page)
+  assert.equal(pendingPages(readDraft(JSON.parse(JSON.stringify(draft))), 'visual').length, 3)
+  assert.ok(draft.pages[3].notes)
+  const invented = { ...rows[0], visual: [{ label: '分派', value: 142 }, { label: '处理', value: 18 }] }
+  const badSource = parseResponse('visual', response({ pages: [invented] }), [chart], draft)
+  assert.equal(badSource.pages[0].layout, 'evidence')
+  assert.deepEqual(badSource.pages[0].visual, [])
+  assert.throws(() => parseResponse('visual', response({ pages: [rows[0], rows[0]] }), [compare, chart], draft), /JSON/)
+})
+
+test('从旧版草稿恢复时保留用户已有的排版', () => {
+  const draft = exampleDraft(5)
+  delete draft.templateChosen
+  draft.pages.forEach((page) => { delete page.designed })
+  const restored = readDraft(draft)
+  assert.equal(restored.templateChosen, true)
+  assert.deepEqual(pendingPages(restored, 'visual'), [])
+  assert.equal(restored.pages[3].layout, 'chart')
+})
+
+test('辨别旧版空白大纲和已经手工编辑的内容', () => {
+  const draft = newDraft()
+  draft.brief.topic = '工单分派试点'
+  Object.assign(draft, makeOutline(draft, 'manual'))
+  assert.equal(hasOutlineWork(draft), false)
+  draft.pages[0].planTitle = '用户已修改封面'
+  assert.ok(hasOutlineWork(draft))
+  draft.pages[0].planTitle = draft.brief.topic
+  draft.pages[1].goal = '解释如何按队列分派'
+  assert.ok(hasOutlineWork(draft))
+  draft.pages[1].goal = ''
+  draft.sections[0].title = '客户体验背景'
+  assert.ok(hasOutlineWork(draft))
 })
 
 test('英文暂停条件与 Unicode 原文经模型解析与存储完整保留', () => {
